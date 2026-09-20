@@ -1,6 +1,16 @@
 __pycache__/
 *.pyc
 .venv/
-models/
 output*
 .DS_Store
+.env
+.coverage
+coverage.xml
+htmlcov/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+deploy/helm/age-detection/charts/
+annotated*.jpg
+models/age_googlenet.onnx
+models/*.part

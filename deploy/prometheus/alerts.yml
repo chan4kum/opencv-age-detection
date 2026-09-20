@@ -1,0 +1,58 @@
+# Prometheus alerting rules. The same expressions are reused by the Helm chart's PrometheusRule.
+groups:
+  - name: age-detection
+    rules:
+      - alert: AgeDetectionHighErrorRate
+        expr: |
+          sum(rate(ad_http_requests_total{status=~"5.."}[5m]))
+            / clamp_min(sum(rate(ad_http_requests_total[5m])), 1e-9) > 0.02
+        for: 10m
+        labels: {severity: page}
+        annotations:
+          summary: "More than 2% of requests are failing with 5xx"
+          runbook_url: "https://github.com/chan4kum/opencv-age-detection/blob/main/docs/RUNBOOK.md#high-error-rate"
+      - alert: AgeDetectionHighLatency
+        expr: |
+          histogram_quantile(0.95, sum by (le) (rate(ad_http_request_duration_seconds_bucket{route="/v1/estimate"}[5m]))) > 0.5
+        for: 10m
+        labels: {severity: ticket}
+        annotations:
+          summary: "p95 latency of /v1/estimate is above 500 ms"
+          runbook_url: "https://github.com/chan4kum/opencv-age-detection/blob/main/docs/RUNBOOK.md#high-latency"
+      - alert: AgeDetectionLoadShedding
+        expr: sum(rate(ad_inference_rejected_total[5m])) > 0
+        for: 5m
+        labels: {severity: ticket}
+        annotations:
+          summary: "Requests are being shed (503) because inference capacity is exhausted; scale out"
+          runbook_url: "https://github.com/chan4kum/opencv-age-detection/blob/main/docs/RUNBOOK.md#load-shedding"
+      - alert: AgeDetectionJobsFailing
+        expr: |
+          sum(rate(ad_jobs_processed_total{outcome=~"failed_exhausted|poison"}[10m])) > 0
+        for: 10m
+        labels: {severity: page}
+        annotations:
+          summary: "Async jobs are failing after exhausting retries (infrastructure fault, not bad input)"
+          runbook_url: "https://github.com/chan4kum/opencv-age-detection/blob/main/docs/RUNBOOK.md#jobs-failing"
+      - alert: AgeDetectionQueueBacklog
+        expr: max(nats_consumer_num_pending{consumer_name="ad-workers"}) > 500
+        for: 10m
+        labels: {severity: ticket}
+        annotations:
+          summary: "More than 500 jobs have been waiting for 10 minutes; workers are not keeping up"
+          runbook_url: "https://github.com/chan4kum/opencv-age-detection/blob/main/docs/RUNBOOK.md#queue-backlog"
+      - alert: AgeDetectionInstanceDown
+        expr: up{job=~"age-detection-.*"} == 0
+        for: 5m
+        labels: {severity: page}
+        annotations:
+          summary: "A age-detection instance is not being scraped"
+      - alert: AgeDetectionManyUncertainEstimates
+        expr: |
+          sum(rate(ad_age_predictions_total{uncertain="true"}[30m]))
+            / clamp_min(sum(rate(ad_age_predictions_total[30m])), 1e-9) > 0.5
+        for: 30m
+        labels: {severity: ticket}
+        annotations:
+          summary: "More than half of age estimates are flagged uncertain; check image quality (blur, size, lighting) or the input distribution"
+          runbook_url: "https://github.com/chan4kum/opencv-age-detection/blob/main/docs/RUNBOOK.md#many-uncertain-estimates"
